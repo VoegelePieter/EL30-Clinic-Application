@@ -1,0 +1,6 @@
+port = 8080
+doctor_amount = 2         # Should be a positive number
+room_amount = 3           # Should be a positive number
+opening_time = "08:00:00"
+closing_time = "17:00:00"
+break_time = "12:00:00"   # Break is 1 hour long
