@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use actix_web::{web, HttpResponse, Responder};
-use chrono::NaiveDateTime;
+use chrono::{Duration, NaiveDate, NaiveDateTime, Timelike};
 use serde::Deserialize;
 
 use crate::db::types::{AppointmentFilter, AppointmentRecordWithPatient};
@@ -31,6 +31,12 @@ pub struct UpdateAppointment {
 pub struct FilterRequest {
     filter: Option<String>,
     value: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+pub struct MassRescheduleRequest {
+    pub doctor_id: u32,
+    pub start_date: NaiveDate,
+    pub end_date: NaiveDate,
 }
 
 // Endpoints
@@ -163,7 +169,14 @@ pub async fn create_appointment(
             }
         };
 
-    let all_appointments: Vec<AppointmentRecordWithPatient> = match db.read_all_appointments().await
+    let all_appointments: Vec<AppointmentRecordWithPatient> = match db
+        .read_all_appointments_by_day(
+            &appointment_with_calculated_time
+                .start_time
+                .date()
+                .to_string(),
+        )
+        .await
     {
         Ok(appointments) => appointments,
         Err(err) => return HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
@@ -257,7 +270,10 @@ pub async fn update_appointment(
         appointment.room_nr = *room_nr;
     }
 
-    let all_appointments = match db.read_all_appointments().await {
+    let all_appointments = match db
+        .read_all_appointments_by_day(&appointment.start_time.date().to_string())
+        .await
+    {
         Ok(appointments) => appointments,
         Err(err) => return HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
     };
@@ -303,4 +319,135 @@ pub async fn read_appointment(
             _ => HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
         },
     }
+}
+
+pub async fn mass_reschedule_doctor(
+    database: web::Data<Arc<Mutex<Database>>>,
+    config: web::Data<AppConfig>,
+    request: web::Json<MassRescheduleRequest>,
+) -> impl Responder {
+    let db = match database.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            return HttpResponse::InternalServerError().body(format!("Lock error: {:?}", err))
+        }
+    };
+
+    let leave_start_date = request.start_date;
+    let leave_end_date = request.end_date;
+
+    let affected_doctor = request.doctor_id;
+
+    let mut appointments_that_day = Vec::new();
+    let mut iterated_date = leave_start_date;
+
+    while iterated_date <= request.end_date {
+        let daily_appointments = match db
+            .read_all_appointments_by_day(&iterated_date.to_string())
+            .await
+        {
+            Ok(appointments) => appointments,
+            Err(err) => {
+                return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+            }
+        };
+        appointments_that_day.extend(daily_appointments);
+        iterated_date = match iterated_date.succ_opt() {
+            Some(date) => date,
+            None => {
+                return HttpResponse::InternalServerError().body("Error: Couldn't increment date")
+            }
+        };
+    }
+
+    let mut affected_appointments = Vec::new();
+
+    for appointment in appointments_that_day {
+        if appointment.doctor == affected_doctor {
+            affected_appointments.push(appointment);
+        }
+    }
+
+    let mut updated_appointments = Vec::new();
+
+    for mut appointment in affected_appointments {
+        let mut new_start_time: NaiveDateTime = match (leave_end_date + Duration::days(1))
+            .and_hms_opt(
+                appointment.start_time.time().hour(),
+                appointment.start_time.time().minute(),
+                appointment.start_time.time().second(),
+            ) {
+            Some(time) => time,
+            None => {
+                return HttpResponse::InternalServerError()
+                    .body("Error: Couldn't create NaiveDateTime")
+            }
+        };
+        let mut new_end_time: NaiveDateTime = match (leave_end_date + Duration::days(1))
+            .and_hms_opt(
+                appointment.end_time.time().hour(),
+                appointment.end_time.time().minute(),
+                appointment.end_time.time().second(),
+            ) {
+            Some(time) => time,
+            None => {
+                return HttpResponse::InternalServerError()
+                    .body("Error: Couldn't create NaiveDateTime")
+            }
+        };
+
+        let mut appointments_of_new_day = match db
+            .read_all_appointments_by_day(&iterated_date.to_string())
+            .await
+        {
+            Ok(appointments) => appointments,
+            Err(err) => {
+                return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+            }
+        };
+
+        while let Err(_) = is_valid_timeframe(
+            new_start_time,
+            new_end_time,
+            appointment.doctor,
+            appointment.room_nr,
+            &appointments_of_new_day,
+            &config,
+        )
+        .await
+        {
+            new_start_time += Duration::days(1);
+            new_end_time += Duration::days(1);
+
+            appointments_of_new_day = match db
+                .read_all_appointments_by_day(&new_start_time.date().to_string())
+                .await
+            {
+                Ok(appointments) => appointments,
+                Err(err) => {
+                    return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+                }
+            };
+        }
+
+        appointment.start_time = new_start_time;
+        appointment.end_time = new_end_time;
+
+        match db
+            .update_appointment(
+                &appointment.id.id.to_raw(),
+                appointment.into_appointment_record(),
+            )
+            .await
+        {
+            Ok(updated_appointment) => {
+                updated_appointments.push(updated_appointment);
+            }
+            Err(err) => {
+                return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+            }
+        }
+    }
+
+    HttpResponse::Ok().json(updated_appointments)
 }
