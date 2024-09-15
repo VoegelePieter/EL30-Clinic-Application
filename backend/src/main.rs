@@ -6,13 +6,13 @@ mod types;
 mod util;
 
 use crate::appointment_endpoints::{
-    create_appointment, delete_appointment, read_all_appointments,
-    read_all_appointments_by_patient, read_appointment, update_appointment,
+    create_appointment, delete_appointment, read_appointment, update_appointment,
 };
 use crate::patient_endpoints::{
     create_patient, delete_patient, read_all_patients, read_patient, update_patient,
 };
 use actix_web::{web, App, HttpServer};
+use appointment_endpoints::read_all_appointments_handler;
 use config::AppConfig;
 use db::db::Database;
 use std::sync::{Arc, Mutex};
@@ -23,7 +23,7 @@ async fn main() -> std::io::Result<()> {
 
     let config = AppConfig::new();
 
-    let port = config.port.clone();
+    let port = config.port;
 
     let database = Arc::new(Mutex::new(Database::new()));
     database.lock().unwrap().initiate_db().await.expect(
@@ -50,17 +50,13 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/appointment")
                             .route(web::post().to(create_appointment))
-                            .route(web::get().to(read_all_appointments)),
+                            .route(web::get().to(read_all_appointments_handler)),
                     )
                     .service(
                         web::resource("/appointment/{id}")
                             .route(web::get().to(read_appointment))
                             .route(web::put().to(update_appointment))
                             .route(web::delete().to(delete_appointment)),
-                    )
-                    .service(
-                        web::resource("/appointment/patient/{id}")
-                            .route(web::get().to(read_all_appointments_by_patient)),
                     ),
             )
     })

@@ -123,6 +123,34 @@ impl AppointmentRecordWithPatient {
         }
     }
 }
+#[derive(Debug, Deserialize)]
+#[serde(tag = "filter", content = "value", rename_all = "snake_case")]
+pub enum AppointmentFilter {
+    Month(String),
+    Day(String),
+    PatientId(PatientRecordId),
+    Doctor(u32),
+    RoomNr(u32),
+}
+
+impl AppointmentFilter {
+    pub fn from_filter_request(filter: &str, value: &str) -> Result<Self, String> {
+        match filter {
+            "month" => Ok(AppointmentFilter::Month(value.to_string())),
+            "day" => Ok(AppointmentFilter::Day(value.to_string())),
+            "patient_id" => Ok(AppointmentFilter::PatientId(PatientRecordId::new(value))),
+            "doctor" => {
+                let doctor = value.parse::<u32>().map_err(|e| e.to_string())?;
+                Ok(AppointmentFilter::Doctor(doctor))
+            }
+            "room_nr" => {
+                let room_nr = value.parse::<u32>().map_err(|e| e.to_string())?;
+                Ok(AppointmentFilter::RoomNr(room_nr))
+            }
+            _ => Err(format!("Unknown filter type: {}", filter)),
+        }
+    }
+}
 #[derive(Debug, Serialize)]
 pub struct PatientRecordId(String);
 
@@ -138,7 +166,7 @@ impl PatientRecordId {
     }
 
     pub fn get_unique_id(&self) -> &str {
-        &self.0.split(':').nth(1).unwrap()
+        self.0.split(':').nth(1).unwrap()
     }
 }
 impl<'de> Deserialize<'de> for PatientRecordId {

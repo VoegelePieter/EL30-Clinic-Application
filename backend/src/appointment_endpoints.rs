@@ -4,14 +4,14 @@ use actix_web::{web, HttpResponse, Responder};
 use chrono::NaiveDateTime;
 use serde::Deserialize;
 
-use crate::db::types::AppointmentRecordWithPatient;
+use crate::db::types::{AppointmentFilter, AppointmentRecordWithPatient};
 use crate::types::ApiResponse;
 use crate::util::is_valid_timeframe;
 use crate::{
     config::AppConfig,
     db::{
         db::Database,
-        types::{Appointment, AppointmentRecord, AppointmentType, DatabaseError, PatientRecordId},
+        types::{Appointment, AppointmentRecord, AppointmentType, DatabaseError},
     },
 };
 
@@ -27,9 +27,30 @@ pub struct UpdateAppointment {
     doctor: Option<u32>,
     room_nr: Option<u32>,
 }
+#[derive(Deserialize, Debug)]
+pub struct FilterRequest {
+    filter: Option<String>,
+    value: Option<String>,
+}
 
 // Endpoints
-pub async fn read_all_appointments(database: web::Data<Arc<Mutex<Database>>>) -> impl Responder {
+pub async fn read_all_appointments_handler(
+    database: web::Data<Arc<Mutex<Database>>>,
+    filter_request: web::Query<FilterRequest>,
+) -> impl Responder {
+    if let (Some(filter), Some(value)) = (&filter_request.filter, &filter_request.value) {
+        let appointment_filter: AppointmentFilter =
+            match AppointmentFilter::from_filter_request(filter, value) {
+                Ok(filter) => filter,
+                Err(e) => return HttpResponse::BadRequest().body(format!("Error: {:?}", e)),
+            };
+        read_all_appointments_by_filter(database, &appointment_filter).await
+    } else {
+        read_all_appointments(database).await
+    }
+}
+
+pub async fn read_all_appointments(database: web::Data<Arc<Mutex<Database>>>) -> HttpResponse {
     let db = match database.lock() {
         Ok(guard) => guard,
         Err(err) => {
@@ -43,10 +64,10 @@ pub async fn read_all_appointments(database: web::Data<Arc<Mutex<Database>>>) ->
     }
 }
 
-pub async fn read_all_appointments_by_patient(
+pub async fn read_all_appointments_by_filter(
     database: web::Data<Arc<Mutex<Database>>>,
-    appointment_id: web::Path<PatientRecordId>,
-) -> impl Responder {
+    filter_request: &AppointmentFilter,
+) -> HttpResponse {
     let db = match database.lock() {
         Ok(guard) => guard,
         Err(err) => {
@@ -54,10 +75,67 @@ pub async fn read_all_appointments_by_patient(
         }
     };
 
-    match db.read_all_appointments_by_patient(&appointment_id).await {
-        Ok(appointments) => HttpResponse::Ok().json(ApiResponse { data: appointments }),
-        Err(err) => HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
-    }
+    let filtered_appointments: Vec<AppointmentRecordWithPatient> = match &filter_request {
+        AppointmentFilter::Day(day) => {
+            if let Err(err) =
+                NaiveDateTime::parse_from_str(&format!("{} 00:00:00", day), "%Y-%m-%d %H:%M:%S")
+            {
+                return HttpResponse::BadRequest().body(format!(
+                    "Invalid day format: {:?}\nCorrect format is Y-m-d",
+                    err
+                ));
+            }
+            match db.read_all_appointments_by_day(day).await {
+                Ok(appointments) => appointments,
+                Err(err) => {
+                    return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+                }
+            }
+        }
+        AppointmentFilter::Month(month) => {
+            if let Err(err) = NaiveDateTime::parse_from_str(
+                &format!("{}-01 00:00:00", month),
+                "%Y-%m-%d %H:%M:%S",
+            ) {
+                return HttpResponse::BadRequest().body(format!(
+                    "Invalid month format: {:?}\nCorrect format is Y-m",
+                    err
+                ));
+            }
+            match db.read_all_appointments_by_month(month).await {
+                Ok(appointments) => appointments,
+                Err(err) => {
+                    return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+                }
+            }
+        }
+        AppointmentFilter::PatientId(patient) => {
+            match db.read_all_appointments_by_patient(patient).await {
+                Ok(appointments) => appointments,
+                Err(err) => {
+                    return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+                }
+            }
+        }
+        AppointmentFilter::Doctor(doctor) => {
+            match db.read_all_appointments_by_doctor(doctor).await {
+                Ok(appointments) => appointments,
+                Err(err) => {
+                    return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+                }
+            }
+        }
+        AppointmentFilter::RoomNr(room) => match db.read_all_appointments_by_room(room).await {
+            Ok(appointments) => appointments,
+            Err(err) => {
+                return HttpResponse::InternalServerError().body(format!("Error: {:?}", err))
+            }
+        },
+    };
+
+    HttpResponse::Ok().json(ApiResponse {
+        data: filtered_appointments,
+    })
 }
 
 pub async fn create_appointment(
@@ -90,7 +168,6 @@ pub async fn create_appointment(
         Ok(appointments) => appointments,
         Err(err) => return HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
     };
-    // let all_appointments: &[AppointmentRecordWithPatient] = all_appointments.as_slice();
 
     match is_valid_timeframe(
         appointment_with_calculated_time.start_time,
@@ -111,9 +188,7 @@ pub async fn create_appointment(
                 Err(err) => HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
             }
         }
-        Err(e) => {
-            return HttpResponse::BadRequest().body(format!("Error: {:?}", e));
-        }
+        Err(e) => HttpResponse::BadRequest().body(format!("Error: {:?}", e)),
     }
 }
 
@@ -156,7 +231,7 @@ pub async fn update_appointment(
     };
 
     if let Some(start_time) = &update.start_time {
-        appointment.start_time = start_time.clone();
+        appointment.start_time = *start_time;
         appointment.end_time = appointment.calculate_end_time();
     }
     if let Some(appointment_type) = &update.appointment_type {
@@ -170,7 +245,7 @@ pub async fn update_appointment(
                 config.doctor_amount - 1
             ));
         }
-        appointment.doctor = doctor.clone();
+        appointment.doctor = *doctor;
     }
     if let Some(room_nr) = &update.room_nr {
         if !config.is_valid_room(*room_nr) {
@@ -179,7 +254,7 @@ pub async fn update_appointment(
                 config.room_amount - 1
             ));
         }
-        appointment.room_nr = room_nr.clone();
+        appointment.room_nr = *room_nr;
     }
 
     let all_appointments = match db.read_all_appointments().await {
@@ -188,7 +263,7 @@ pub async fn update_appointment(
     };
     let all_appointments: Vec<AppointmentRecordWithPatient> = all_appointments
         .as_slice()
-        .into_iter()
+        .iter()
         .filter(|a| a.id.id.to_raw() != appointment_id.id)
         .cloned()
         .collect();
@@ -207,9 +282,7 @@ pub async fn update_appointment(
             Ok(result) => HttpResponse::Ok().json(result),
             Err(err) => HttpResponse::InternalServerError().body(format!("Error: {:?}", err)),
         },
-        Err(e) => {
-            return HttpResponse::BadRequest().body(format!("Error: {:?}", e));
-        }
+        Err(e) => HttpResponse::BadRequest().body(format!("Error: {:?}", e)),
     }
 }
 

@@ -17,7 +17,7 @@ impl Database {
             .ok_or(DatabaseError::ConnectionLost)?;
 
         let patient_exists = self
-            .read_patient(&appointment.patient_id.get_unique_id())
+            .read_patient(appointment.patient_id.get_unique_id())
             .await;
         match patient_exists {
             Ok(_) => {}
@@ -30,6 +30,24 @@ impl Database {
             .content(appointment)
             .await
             .map_err(DatabaseError::from)
+    }
+
+    async fn populate_appointments_with_patient(
+        &self,
+        appointments: Vec<AppointmentRecord>,
+    ) -> Result<Vec<AppointmentRecordWithPatient>, DatabaseError> {
+        let mut appointments_with_patient = Vec::new();
+
+        for appointment in appointments {
+            let patient = self
+                .read_patient(appointment.patient_id.get_unique_id())
+                .await?;
+            let appointment_with_patient =
+                AppointmentRecordWithPatient::from_appointment_record(appointment, patient);
+            appointments_with_patient.push(appointment_with_patient);
+        }
+
+        Ok(appointments_with_patient)
     }
 
     pub async fn read_all_appointments(
@@ -45,16 +63,105 @@ impl Database {
             .await
             .map_err(DatabaseError::from)?;
 
-        let mut appointments_with_patient = Vec::new();
+        let appointments_with_patient = self
+            .populate_appointments_with_patient(appointments)
+            .await?;
 
-        for appointment in appointments {
-            let patient = self
-                .read_patient(&appointment.patient_id.get_unique_id())
-                .await?;
-            let appointment_with_patient =
-                AppointmentRecordWithPatient::from_appointment_record(appointment, patient);
-            appointments_with_patient.push(appointment_with_patient);
-        }
+        Ok(appointments_with_patient)
+    }
+
+    pub async fn read_all_appointments_by_day(
+        &self,
+        day: &str,
+    ) -> Result<Vec<AppointmentRecordWithPatient>, DatabaseError> {
+        let conn = self
+            .get_connection()
+            .await
+            .ok_or(DatabaseError::ConnectionLost)?;
+
+        let mut result = conn
+            .query("SELECT * FROM appointment WHERE string::startsWith(start_time, $day)")
+            .bind(("day", day))
+            .await
+            .map_err(DatabaseError::from)?;
+
+        let appointments: Vec<AppointmentRecord> = result.take(0)?;
+
+        let appointments_with_patient = self
+            .populate_appointments_with_patient(appointments)
+            .await?;
+
+        Ok(appointments_with_patient)
+    }
+
+    pub async fn read_all_appointments_by_month(
+        &self,
+        month: &str,
+    ) -> Result<Vec<AppointmentRecordWithPatient>, DatabaseError> {
+        let conn = self
+            .get_connection()
+            .await
+            .ok_or(DatabaseError::ConnectionLost)?;
+
+        let mut result = conn
+            .query("SELECT * FROM appointment WHERE string::startsWith(start_time, $month)")
+            .bind(("month", month))
+            .await
+            .map_err(DatabaseError::from)?;
+
+        let appointments: Vec<AppointmentRecord> = result.take(0)?;
+
+        let appointments_with_patient = self
+            .populate_appointments_with_patient(appointments)
+            .await?;
+
+        Ok(appointments_with_patient)
+    }
+
+    pub async fn read_all_appointments_by_doctor(
+        &self,
+        doctor_id: &u32,
+    ) -> Result<Vec<AppointmentRecordWithPatient>, DatabaseError> {
+        let conn = self
+            .get_connection()
+            .await
+            .ok_or(DatabaseError::ConnectionLost)?;
+
+        let mut result = conn
+            .query("SELECT * FROM appointment WHERE doctor = $doctor_id")
+            .bind(("doctor_id", doctor_id))
+            .await
+            .map_err(DatabaseError::from)?;
+
+        let appointments: Vec<AppointmentRecord> = result.take(0)?;
+
+        let appointments_with_patient = self
+            .populate_appointments_with_patient(appointments)
+            .await?;
+
+        Ok(appointments_with_patient)
+    }
+
+    pub async fn read_all_appointments_by_room(
+        &self,
+        room_nr: &u32,
+    ) -> Result<Vec<AppointmentRecordWithPatient>, DatabaseError> {
+        let conn = self
+            .get_connection()
+            .await
+            .ok_or(DatabaseError::ConnectionLost)?;
+
+        let mut result = conn
+            .query("SELECT * FROM appointment WHERE room_nr = $room_nr")
+            .bind(("room_nr", room_nr))
+            .await
+            .map_err(DatabaseError::from)?;
+
+        let appointments: Vec<AppointmentRecord> = result.take(0)?;
+
+        let appointments_with_patient = self
+            .populate_appointments_with_patient(appointments)
+            .await?;
 
         Ok(appointments_with_patient)
     }
@@ -76,16 +183,9 @@ impl Database {
 
         let appointments: Vec<AppointmentRecord> = result.take(0)?;
 
-        let mut appointments_with_patient = Vec::new();
-
-        for appointment in appointments {
-            let patient = self
-                .read_patient(&appointment.patient_id.get_unique_id())
-                .await?;
-            let appointment_with_patient =
-                AppointmentRecordWithPatient::from_appointment_record(appointment, patient);
-            appointments_with_patient.push(appointment_with_patient);
-        }
+        let appointments_with_patient = self
+            .populate_appointments_with_patient(appointments)
+            .await?;
 
         Ok(appointments_with_patient)
     }
@@ -106,7 +206,7 @@ impl Database {
             .ok_or(DatabaseError::NothingFound)?;
 
         let patient = self
-            .read_patient(&appointment.patient_id.get_unique_id())
+            .read_patient(appointment.patient_id.get_unique_id())
             .await?;
 
         Ok(Some(AppointmentRecordWithPatient::from_appointment_record(
