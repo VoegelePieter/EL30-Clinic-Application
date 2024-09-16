@@ -1,6 +1,9 @@
 port = 8080
-doctor_amount = 2         # Should be a positive number
-room_amount = 3           # Should be a positive number
+doctor_amount = 2               # Should be a positive number
+room_amount = 3                 # Should be a positive number
+namespace = "development"
+database = "development"
+database_url = "127.0.0.1:8000"
 opening_time = "08:00:00"
 closing_time = "17:00:00"
-break_time = "13:00:00"   # Break is 1 hour long
+break_time = "13:00:00"         # Break is 1 hour long

@@ -26,9 +26,14 @@ async fn main() -> std::io::Result<()> {
     let port = config.port;
 
     let database = Arc::new(Mutex::new(Database::new()));
-    database.lock().unwrap().initiate_db().await.expect(
-        "Couldn't initiate database. Make sure the server is running and configured correctly.",
-    );
+    database
+        .lock()
+        .unwrap()
+        .initiate_db(config.clone())
+        .await
+        .expect(
+            "Couldn't initiate database. Make sure the server is running and configured correctly.",
+        );
 
     HttpServer::new(move || {
         App::new()

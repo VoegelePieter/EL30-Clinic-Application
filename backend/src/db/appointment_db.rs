@@ -248,3 +248,336 @@ impl Database {
         result.ok_or(DatabaseError::NothingFound)
     }
 }
+
+#[cfg(test)]
+mod appointment_db_tests {
+    use crate::db::{
+        db::database_tests::mock_db,
+        types::{Appointment, AppointmentType, Patient},
+    };
+
+    use chrono::NaiveDateTime;
+    use rand::{thread_rng, Rng};
+
+    use super::*;
+
+    async fn create_dummy_patients(db: &Database, count: u32) -> Vec<PatientRecordId> {
+        let mut patient_ids = Vec::new();
+        for i in 0..count {
+            let patient = Patient {
+                name: format!("John Doe {}", i),
+                phone_number: thread_rng().gen_range(100000000..999999999).to_string(),
+                insurance_number: None,
+            };
+
+            let patient = db.create_patient(patient).await.unwrap();
+            patient_ids.push(PatientRecordId::new(&patient[0].id.id.to_raw()));
+        }
+        patient_ids
+    }
+
+    #[tokio::test]
+    async fn test_create_appointment() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 2).await;
+
+        let appointment = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let result = &mock_db
+            .create_appointment(appointment.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap()[0];
+
+        assert_eq!(result.patient_id, appointment.patient_id);
+        assert_eq!(result.doctor, appointment.doctor);
+        assert_eq!(
+            result.start_time,
+            NaiveDateTime::parse_from_str(&appointment.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+        );
+        assert!(result.end_time == result.start_time + result.appointment_type.duration());
+    }
+
+    #[tokio::test]
+    async fn test_populate_appointments_with_patient() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 1).await;
+
+        let appointment = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let created_appointment = &mock_db
+            .create_appointment(appointment.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap()[0];
+
+        let appointments = vec![(*created_appointment).clone()];
+
+        // Populate appointments with patient data
+        let result = mock_db
+            .populate_appointments_with_patient(appointments)
+            .await
+            .unwrap();
+
+        // Assert that the populated data matches the expected data
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id, created_appointment.id);
+        assert_eq!(
+            result[0].patient.id.id.to_raw(),
+            patient_ids[0].get_unique_id()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_read_all_appointments() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 2).await;
+
+        let appointment1 = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let appointment2 = Appointment {
+            start_time: "2023-10-01T13:00:00".to_string(),
+            appointment_type: AppointmentType::Surgery,
+            patient_id: patient_ids[1].clone(),
+            doctor: 0,
+            room_nr: 1,
+        };
+
+        mock_db
+            .create_appointment(appointment1.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap();
+        mock_db
+            .create_appointment(appointment2.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap();
+
+        // Read all appointments from the database
+        let result = mock_db.read_all_appointments().await.unwrap();
+
+        // Assert that the retrieved data matches the inserted data
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result[0].patient.id.id.to_raw(),
+            appointment1.patient_id.get_unique_id()
+        );
+        assert_eq!(result[0].doctor, appointment1.doctor);
+        assert_eq!(
+            result[0].start_time,
+            NaiveDateTime::parse_from_str(&appointment1.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+        );
+        assert_eq!(
+            result[1].patient.id.id.to_raw(),
+            appointment2.patient_id.get_unique_id()
+        );
+        assert_eq!(result[1].doctor, appointment2.doctor);
+        assert_eq!(
+            result[1].start_time,
+            NaiveDateTime::parse_from_str(&appointment2.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_read_all_appointments_filters() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 1).await;
+
+        let appointment1 = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let appointment2 = Appointment {
+            start_time: "2023-10-15T13:00:00".to_string(),
+            appointment_type: AppointmentType::Surgery,
+            patient_id: patient_ids[0].clone(),
+            doctor: 2,
+            room_nr: 1,
+        };
+
+        mock_db
+            .create_appointment(appointment1.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap();
+        mock_db
+            .create_appointment(appointment2.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap();
+
+        // Test read_all_appointments_by_day
+        let result_by_day = mock_db
+            .read_all_appointments_by_day("2023-10-01")
+            .await
+            .unwrap();
+        assert_eq!(result_by_day.len(), 1);
+
+        // Test read_all_appointments_by_month
+        let result_by_month = mock_db
+            .read_all_appointments_by_month("2023-10")
+            .await
+            .unwrap();
+        assert_eq!(result_by_month.len(), 2);
+
+        // Test read_all_appointments_by_doctor
+        let result_by_doctor = mock_db.read_all_appointments_by_doctor(&1).await.unwrap();
+        assert_eq!(result_by_doctor.len(), 1);
+
+        // Test read_all_appointments_by_room
+        let result_by_room = mock_db.read_all_appointments_by_room(&0).await.unwrap();
+        assert_eq!(result_by_room.len(), 1);
+
+        // Test read_all_appointments_by_patient
+        let result_by_patient = mock_db
+            .read_all_appointments_by_patient(&patient_ids[0])
+            .await
+            .unwrap();
+        assert_eq!(result_by_patient.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_read_appointment() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 1).await;
+
+        let appointment = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let created_appointment = &mock_db
+            .create_appointment(appointment.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap()[0];
+
+        // Read the appointment from the database
+        let result = mock_db
+            .read_appointment(&created_appointment.id.id.to_raw())
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Assert that the retrieved data matches the inserted data
+        assert_eq!(
+            result.patient.id.id.to_raw(),
+            appointment.patient_id.get_unique_id()
+        );
+        assert_eq!(result.doctor, appointment.doctor);
+        assert_eq!(
+            result.start_time,
+            NaiveDateTime::parse_from_str(&appointment.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_appointment() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 1).await;
+
+        let appointment = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let created_appointment = &mock_db
+            .create_appointment(appointment.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap()[0];
+
+        let updated_appointment = AppointmentRecord {
+            id: created_appointment.id.clone(),
+            start_time: NaiveDateTime::parse_from_str("2023-10-01T11:00:00", "%Y-%m-%dT%H:%M:%S")
+                .unwrap(),
+            end_time: NaiveDateTime::parse_from_str("2023-10-01T11:15:00", "%Y-%m-%dT%H:%M:%S")
+                .unwrap(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 2,
+            room_nr: 1,
+        };
+
+        // Update the appointment in the database
+        let result = mock_db
+            .update_appointment(
+                &created_appointment.id.id.to_raw(),
+                updated_appointment.clone(),
+            )
+            .await
+            .unwrap();
+
+        // Assert that the updated data matches the expected data
+        assert_eq!(result.patient_id, updated_appointment.patient_id);
+        assert_eq!(result.doctor, updated_appointment.doctor);
+        assert_eq!(result.start_time, updated_appointment.start_time);
+    }
+
+    #[tokio::test]
+    async fn test_delete_appointment() {
+        let mock_db = mock_db().await;
+
+        let patient_ids = create_dummy_patients(&mock_db, 1).await;
+
+        let appointment = Appointment {
+            start_time: "2023-10-01T10:00:00".to_string(),
+            appointment_type: AppointmentType::QuickCheckup,
+            patient_id: patient_ids[0].clone(),
+            doctor: 1,
+            room_nr: 0,
+        };
+
+        let created_appointment = &mock_db
+            .create_appointment(appointment.clone().into_appointment_with_time().unwrap())
+            .await
+            .unwrap()[0];
+
+        // Delete the appointment from the database
+        let result = mock_db
+            .delete_appointment(&created_appointment.id.id.to_raw())
+            .await
+            .unwrap();
+
+        // Assert that the deleted data matches the inserted data
+        assert_eq!(result.patient_id, appointment.patient_id);
+        assert_eq!(result.doctor, appointment.doctor);
+        assert_eq!(
+            result.start_time,
+            NaiveDateTime::parse_from_str(&appointment.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+        );
+
+        // Assert that the appointment is no longer in the database
+        let result = mock_db
+            .read_appointment(&created_appointment.id.to_raw())
+            .await;
+        assert!(result.is_err());
+    }
+}

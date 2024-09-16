@@ -40,6 +40,12 @@ You may want to change some configuration, like `port`, `doctor_amount`, `room_a
 
 ## Backend
 
+### Testing
+
+In the terminal, when inside of the `/backend` directory, run the command `cargo test --workspace -- --test-threads=1` to run all unit and integration tests
+The reason for why the threads need to be limited to one is because the changes to the database are so frequent, and the database is so regularly cleared, that tests will not behave consistently otherwise.
+As an example: _Test1_ starts its process, creates the empty mock database, creates some database entry, _Test2_ starts its process asynchronously, empties the mock database, and now the database entry that _Test1_ created is gone, causing _Test1_ to fail.
+
 ### API Documentation
 
 The API can be most easily tested using the Postman Collection in the projects' root folder.

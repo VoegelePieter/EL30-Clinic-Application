@@ -23,22 +23,22 @@ pub enum DatabaseError {
     Other(String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Patient {
     pub name: String,
     pub phone_number: String,
     pub insurance_number: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct PatientRecord {
-    id: Thing,
+    pub id: Thing,
     pub name: String,
     pub phone_number: String,
     pub insurance_number: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Appointment {
     pub start_time: String,
     pub appointment_type: AppointmentType,
@@ -46,7 +46,7 @@ pub struct Appointment {
     pub doctor: u32,
     pub room_nr: u32,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppointmentWithTime {
     pub start_time: NaiveDateTime,
     pub end_time: NaiveDateTime,
@@ -71,9 +71,9 @@ impl Appointment {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AppointmentRecord {
-    id: Thing,
+    pub id: Thing,
     pub start_time: NaiveDateTime,
     pub end_time: NaiveDateTime,
     pub appointment_type: AppointmentType,
@@ -151,7 +151,7 @@ impl AppointmentFilter {
         }
     }
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone, PartialEq)]
 pub struct PatientRecordId(String);
 
 impl PatientRecordId {
@@ -201,7 +201,7 @@ impl<'de> Deserialize<'de> for PatientRecordId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum AppointmentType {
     QuickCheckup,
@@ -216,5 +216,46 @@ impl AppointmentType {
             AppointmentType::ExtensiveCare => Duration::hours(1),
             AppointmentType::Surgery => Duration::hours(2),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn test_patient_record_id_deserialization() {
+        let valid_id = "\"patient:12345\"";
+        let invalid_id = "\"invalid:12345\"";
+
+        let deserialized: Result<PatientRecordId, _> = serde_json::from_str(valid_id);
+        assert!(deserialized.is_ok());
+
+        let deserialized: Result<PatientRecordId, _> = serde_json::from_str(invalid_id);
+        assert!(deserialized.is_err());
+    }
+
+    #[test]
+    fn test_appointment_type_serialization() {
+        let quick_checkup = AppointmentType::QuickCheckup;
+        let serialized = serde_json::to_string(&quick_checkup).unwrap();
+        assert_eq!(serialized, "\"quick_checkup\"");
+
+        let deserialized: AppointmentType = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, AppointmentType::QuickCheckup);
+    }
+
+    #[test]
+    fn test_appointment_type_duration() {
+        assert_eq!(
+            AppointmentType::QuickCheckup.duration(),
+            Duration::minutes(30)
+        );
+        assert_eq!(
+            AppointmentType::ExtensiveCare.duration(),
+            Duration::hours(1)
+        );
+        assert_eq!(AppointmentType::Surgery.duration(), Duration::hours(2));
     }
 }
