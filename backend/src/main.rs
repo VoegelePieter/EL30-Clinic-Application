@@ -1,20 +1,13 @@
-mod appointment_endpoints;
-mod config;
-mod db;
-mod patient_endpoints;
-mod types;
-mod util;
-
-use crate::appointment_endpoints::{
-    create_appointment, delete_appointment, read_appointment, update_appointment,
+use actix_web::{web, App, HttpServer};
+use backend::appointment_endpoints::{
+    create_appointment, delete_appointment, mass_reschedule_doctor, read_all_appointments_handler,
+    read_appointment, update_appointment,
 };
-use crate::patient_endpoints::{
+use backend::config::AppConfig;
+use backend::db::db::Database;
+use backend::patient_endpoints::{
     create_patient, delete_patient, read_all_patients, read_patient, update_patient,
 };
-use actix_web::{web, App, HttpServer};
-use appointment_endpoints::{mass_reschedule_doctor, read_all_appointments_handler};
-use config::AppConfig;
-use db::db::Database;
 use std::sync::{Arc, Mutex};
 
 #[tokio::main]

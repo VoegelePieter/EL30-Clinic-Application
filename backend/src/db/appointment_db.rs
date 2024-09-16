@@ -376,23 +376,34 @@ mod appointment_db_tests {
 
         // Assert that the retrieved data matches the inserted data
         assert_eq!(result.len(), 2);
+
+        let mut sorted_result = result.clone();
+        sorted_result.sort_by_key(|a| a.start_time);
+
+        let mut sorted_appointments = vec![appointment1.clone(), appointment2.clone()];
+        sorted_appointments.sort_by_key(|a| {
+            NaiveDateTime::parse_from_str(&a.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+        });
+
         assert_eq!(
-            result[0].patient.id.id.to_raw(),
-            appointment1.patient_id.get_unique_id()
+            sorted_result[0].patient.id.id.to_raw(),
+            sorted_appointments[0].patient_id.get_unique_id()
         );
-        assert_eq!(result[0].doctor, appointment1.doctor);
+        assert_eq!(sorted_result[0].doctor, sorted_appointments[0].doctor);
         assert_eq!(
-            result[0].start_time,
-            NaiveDateTime::parse_from_str(&appointment1.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+            sorted_result[0].start_time,
+            NaiveDateTime::parse_from_str(&sorted_appointments[0].start_time, "%Y-%m-%dT%H:%M:%S")
+                .unwrap()
         );
         assert_eq!(
-            result[1].patient.id.id.to_raw(),
-            appointment2.patient_id.get_unique_id()
+            sorted_result[1].patient.id.id.to_raw(),
+            sorted_appointments[1].patient_id.get_unique_id()
         );
-        assert_eq!(result[1].doctor, appointment2.doctor);
+        assert_eq!(sorted_result[1].doctor, sorted_appointments[1].doctor);
         assert_eq!(
-            result[1].start_time,
-            NaiveDateTime::parse_from_str(&appointment2.start_time, "%Y-%m-%dT%H:%M:%S").unwrap()
+            sorted_result[1].start_time,
+            NaiveDateTime::parse_from_str(&sorted_appointments[1].start_time, "%Y-%m-%dT%H:%M:%S")
+                .unwrap()
         );
     }
 
