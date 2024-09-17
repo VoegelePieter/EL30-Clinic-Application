@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::{web, App, HttpServer};
 use backend::appointment_endpoints::{
     create_appointment, delete_appointment, mass_reschedule_doctor, read_all_appointments_handler,
@@ -29,7 +30,14 @@ async fn main() -> std::io::Result<()> {
         );
 
     HttpServer::new(move || {
+        let cors = Cors::default()
+            .allow_any_origin()
+            .allow_any_method()
+            .allow_any_header()
+            .max_age(3600);
+
         App::new()
+            .wrap(cors)
             .app_data(web::Data::new(database.clone()))
             .app_data(web::Data::new(config.clone()))
             .service(
