@@ -5,6 +5,7 @@ use backend::appointment_endpoints::{
     read_appointment, update_appointment,
 };
 use backend::config::AppConfig;
+use backend::config_endpoints::{get_doctor_amount, get_room_amount};
 use backend::db::db::Database;
 use backend::patient_endpoints::{
     create_patient, delete_patient, read_all_patients, read_patient, update_patient,
@@ -67,6 +68,13 @@ async fn main() -> std::io::Result<()> {
                             .route(web::get().to(read_appointment))
                             .route(web::put().to(update_appointment))
                             .route(web::delete().to(delete_appointment)),
+                    )
+                    .service(
+                        web::resource("/config/doctor_amount")
+                            .route(web::get().to(get_doctor_amount)),
+                    )
+                    .service(
+                        web::resource("/config/room_amount").route(web::get().to(get_room_amount)),
                     ),
             )
     })
