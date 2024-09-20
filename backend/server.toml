@@ -1,6 +1,6 @@
 port = 8080
 doctor_amount = 2               # Should be a positive number
-room_amount = 3                 # Should be a positive number
+room_amount = 2                 # Should be a positive number
 namespace = "development"
 database = "development"
 database_url = "127.0.0.1:8000"
