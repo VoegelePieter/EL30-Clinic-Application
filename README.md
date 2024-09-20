@@ -63,6 +63,24 @@ http://127.0.0.1:8080/api
 
 ---
 
+### Configuration Endpoints
+
+#### Get Doctor Amount
+
+- **URL**: `/config/doctor_amount`
+- **Method**: `GET`
+- **Description**: Gets the amount of doctors, starting at 0. E.g.: if it returns 2, it means there's doctor 0, 1, and 2
+- **Response**:
+  - `200 OK` with the number in the body
+
+#### Get Room Amount
+
+- **URL**: `/config/room_amount`
+- **Method**: `GET`
+- **Description**: Gets the amount of rooms, starting at 0. E.g.: if it returns 2, it means there's room 0, 1, and 2
+- **Response**:
+  - `200 OK` with the number in the body
+
 ### Patient Endpoints
 
 #### Create Patient
