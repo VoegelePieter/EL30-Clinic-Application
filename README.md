@@ -13,6 +13,7 @@ Before you begin, ensure you have the following installed on your machine:
 
 - [SurrealDB](https://surrealdb.com/docs/surrealdb/installation)
 - [Rust](https://www.rust-lang.org/tools/install)
+- [Live Server](https://www.npmjs.com/package/live-server) (for serving frontend assets)
 
 ### Starting the Database
 
@@ -37,6 +38,36 @@ Before you begin, ensure you have the following installed on your machine:
 #### Configuring the Backend
 
 You may want to change some configuration, like `port`, `doctor_amount`, `room_amount`, `opening_time`, `closing_time`, `break_time`. For this, navigate to the `server.toml` in `*/backend`
+
+## Frontend Usage
+
+### Accessing the Frontend
+
+1. Open your preferred web browser.
+2. Enter the local URL provided by the Live Server, typically `http://127.0.0.1:8080`.
+
+### Managing Patients
+
+- **Manage Patients**: This button opens a modal where you can create new patients, update existing ones, or delete them.
+  - **Creating a New Patient**: Fill in the patient's name and phone number, then click "Create Patient".
+  - **Updating or Deleting a Patient**: Select a patient from the dropdown menu to update their details or delete them.
+
+### Creating Appointments
+
+- **Create Appointment**: This button opens a modal to schedule a new appointment. Fill in the necessary information such as the date, doctor, appointment type, start time, patient, and room, then click "Create Appointment".
+
+### Viewing Appointments
+
+- **Navigating Dates**: Use the "Previous Day" and "Next Day" buttons to navigate between dates. The appointments for the selected day will be displayed below.
+- **Appointments List**: View all appointments for the selected date, including details such as the doctor, patient, type, start and end times, duration, and room number. You can also cancel any appointment directly from this list.
+
+### Handling Doctors' Schedules
+
+- **Manage Doctors**: Use this button to manage doctor availabilities, particularly for scheduling around their sickness or leave. Select a doctor, specify the start and end dates of their unavailability, and submit to reschedule their appointments.
+
+### Confirming Actions
+
+- **Confirm Cancellation**: This modal will ask you to confirm the cancellation of an appointment to prevent accidental deletions.
 
 ## Backend
 
