@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Manage Patients and Appointments</title>
+   <!-- Bootstrap CSS -->
+   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+   <div class="container mt-5">
+      <!-- Your HTML Content Here -->
+      <h2 class="mb-4">Manage Patients and Appointments</h2>
+      <div class="d-flex gap-3 mb-4">
+         <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#managePatientsModal">
+            Manage Patients
+         </button>
+         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createAppointmentModal">
+            Create Appointment
+         </button>
+         <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#manageDoctorsModal">
+            Manage Doctors
+         </button>
+      </div>
+
+      <!-- Date Selection and Navigation -->
+      <div class="mb-4">
+         <h4>View Appointments for a Specific Day</h4>
+         <div class="d-flex align-items-center gap-2">
+            <button id="prev-day-btn" class="btn btn-primary btn-sm">← Previous Day</button>
+            <input type="date" id="select-day" class="form-control w-25" />
+            <button id="next-day-btn" class="btn btn-primary btn-sm">Next Day →</button>
+         </div>
+      </div>
+
+      <!-- Appointments List -->
+      <div id="appointments-section" style="display: none;">
+         <h3>
+             Appointments for <span id="selected-date">2024-09-20</span>
+         </h3>
+         <table class="table">
+             <thead>
+                 <tr>
+                     <th>Doctor</th>
+                     <th>Patient</th>
+                     <th>Appointment Type</th>
+                     <th>Start Time</th>
+                     <th>End Time</th>
+                     <th>Length</th>
+                     <th>Room Number</th>
+                     <th>Actions</th>
+                 </tr>
+             </thead>
+             <tbody id="appointments-table-body">
+                 <!-- Appointment rows dynamically inserted here -->
+             </tbody>
+         </table>
+     </div>
+
+      <!-- Modal: Manage Patients -->
+      <div class="modal fade" id="managePatientsModal" tabindex="-1" aria-labelledby="managePatientsModalLabel" aria-hidden="true">
+         <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+               <div class="modal-header">
+                  <h5 class="modal-title" id="managePatientsModalLabel">Manage Patients</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+               </div>
+               <div class="modal-body">
+                  <!-- Create New Patient -->
+                  <section class="mb-4">
+                     <h5>Create New Patient</h5>
+                     <form id="create-patient-form" class="needs-validation" novalidate>
+                        <div class="mb-3">
+                           <label for="new-patient-name" class="form-label">Patient Name</label>
+                           <input type="text" class="form-control" id="new-patient-name" required>
+                           <div class="invalid-feedback">
+                              Please enter the patient's name.
+                           </div>
+                        </div>
+                        <div class="mb-3">
+                           <label for="new-patient-phone" class="form-label">Phone Number</label>
+                           <input type="tel" class="form-control" id="new-patient-phone" required>
+                        </div>
+                        <button type="submit" class="btn btn-success">Create Patient</button>
+                     </form>
+                  </section>
+
+                  <hr>
+
+                  <!-- Update or Delete Patient -->
+                  <section>
+                     <h5>Update or Delete Patient</h5>
+                     <div class="mb-3">
+                        <label for="patient-selection" class="form-label">Select a Patient</label>
+                        <select class="form-select" id="patient-selection" required>
+                           <option value="" disabled selected>Select a Patient</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select a patient.
+                        </div>
+                     </div>
+
+                     <!-- Patient Details Form -->
+                     <form id="update-delete-patient-form" class="d-none needs-validation" novalidate>
+                        <div class="mb-3">
+                           <label for="update-patient-name" class="form-label">Name</label>
+                           <input type="text" class="form-control" id="update-patient-name" required>
+                           <div class="invalid-feedback">
+                              Please enter the patient's name.
+                           </div>
+                        </div>
+                        <div class="mb-3">
+                           <label for="update-patient-phone" class="form-label">Phone Number</label>
+                           <input type="tel" class="form-control" id="update-patient-phone" required>
+                        </div>
+                        <button type="submit" class="btn btn-warning me-2">Update Patient</button>
+                        <button type="button" class="btn btn-danger" id="delete-patient-btn">Delete Patient</button>
+                     </form>
+                  </section>
+               </div>
+            </div>
+         </div>
+      </div>
+
+      <!-- Modal: Create Appointment -->
+      <div class="modal fade" id="createAppointmentModal" tabindex="-1" aria-labelledby="createAppointmentModalLabel" aria-hidden="true">
+         <div class="modal-dialog">
+            <div class="modal-content">
+               <div class="modal-header">
+                  <h5 class="modal-title" id="createAppointmentModalLabel">Create Appointment</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+               </div>
+               <div class="modal-body">
+                  <form id="create-appointment-form" class="needs-validation" novalidate>
+                     <div class="mb-3">
+                        <label for="appointment-day" class="form-label">Select Day</label>
+                        <input type="date" class="form-control" id="appointment-day" required>
+                        <div class="invalid-feedback">
+                           Please select a day.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="doctor-id" class="form-label">Select Doctor</label>
+                        <select class="form-select" id="doctor-id" required>
+                           <option value="" disabled selected>Select a Doctor</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select a doctor.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="appointment-type" class="form-label">Appointment Type</label>
+                        <select class="form-select" id="appointment-type" required>
+                           <option value="" disabled selected>Select Appointment Type</option>
+                           <option value="quick_checkup">Quick Checkup</option>
+                           <option value="extensive_care">Extensive Care</option>
+                           <option value="surgery">Surgery</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select an appointment type.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="appointment-start-time" class="form-label">Start Time</label>
+                        <select class="form-select" id="appointment-start-time" required>
+                           <option value="" disabled selected>Select Start Time</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select a start time.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="appointment-patient-id" class="form-label">Patient</label>
+                        <select class="form-select" id="appointment-patient-id" required>
+                           <option value="" disabled selected>Select a Patient</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select a patient.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="room-number-select" class="form-label">Select Room</label>
+                        <select class="form-select" id="room-number-select" required>
+                           <option value="" disabled selected>Select a Room</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select a room.
+                        </div>
+                     </div>
+
+                     <button type="submit" class="btn btn-primary">Create Appointment</button>
+                  </form>
+               </div>
+            </div>
+         </div>
+      </div>
+
+      <!-- Modal: Manage Doctors' Sickness -->
+      <div class="modal fade" id="manageDoctorsModal" tabindex="-1" aria-labelledby="manageDoctorsModalLabel" aria-hidden="true">
+         <div class="modal-dialog">
+            <div class="modal-content">
+               <div class="modal-header">
+                  <h5 class="modal-title" id="manageDoctorsModalLabel">Manage Doctor's Sickness</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+               </div>
+               <div class="modal-body">
+                  <form id="manage-doctors-form" class="needs-validation" novalidate>
+                     <div class="mb-3">
+                        <label for="manage-doctor-id" class="form-label">Select Doctor</label>
+                        <select class="form-select" id="manage-doctor-id" required>
+                           <option value="" disabled selected>Select a Doctor</option>
+                        </select>
+                        <div class="invalid-feedback">
+                           Please select a doctor.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="sickness-start-date" class="form-label">Sickness Start Date</label>
+                        <input type="date" class="form-control" id="sickness-start-date" required>
+                        <div class="invalid-feedback">
+                           Please select a start date.
+                        </div>
+                     </div>
+
+                     <div class="mb-3">
+                        <label for="sickness-end-date" class="form-label">Sickness End Date</label>
+                        <input type="date" class="form-control" id="sickness-end-date" required>
+                        <div class="invalid-feedback">
+                           Please select an end date.
+                        </div>
+                     </div>
+
+                     <button type="submit" class="btn btn-danger">Mass Reschedule Doctor</button>
+                  </form>
+               </div>
+            </div>
+         </div>
+      </div>
+
+      <!-- Modal: Confirm Cancellation -->
+      <div class="modal fade" id="confirmCancelModal" tabindex="-1" aria-labelledby="confirmCancelModalLabel" aria-hidden="true">
+         <div class="modal-dialog">
+            <div class="modal-content">
+               <div class="modal-header">
+                  <h5 class="modal-title" id="confirmCancelModalLabel">Confirm Cancellation</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+               </div>
+               <div class="modal-body">
+                  Are you sure you want to cancel this appointment?
+               </div>
+               <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No</button>
+                  <button type="button" class="btn btn-danger" id="confirm-cancel-btn">Yes, Cancel</button>
+               </div>
+            </div>
+         </div>
+      </div>
+   </div>
+
+   <!-- Bootstrap JS Bundle -->
+   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+   
+   <!-- ES6 Module Import -->
+   <script type="module" src="src/main.js"></script>
+</body>
+</html>
